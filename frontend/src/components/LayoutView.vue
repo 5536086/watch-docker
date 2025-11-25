@@ -85,6 +85,7 @@ watchEffect(() => {
 onMounted(async () => {
   await appStore.checkHealth()
   Promise.all([
+    settingStore.fetchSystemInfo(),
     containerStore.fetchContainers(true, false),
     imageStore.fetchImages(),
     containerStore.statsWebSocket.connect(),
@@ -94,6 +95,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   imageStore.stopImagesPolling()
+
   containerStore.statsWebSocket.disconnect()
 })
 
@@ -133,9 +135,8 @@ watch(visibility, (newVal) => {
 }
 
 .layout-content {
-  padding: 16px;
+  padding: var(--layout-padding);
   box-sizing: border-box;
-  min-height: calc(100vh - 56px);
 }
 
 #footer {
@@ -162,7 +163,8 @@ watch(visibility, (newVal) => {
 
 .header-content {
   padding: 0 16px;
-  height: 56px;
+  // 加下 border 是56px
+  height: 55px;
   box-sizing: border-box;
   display: flex;
   align-items: center;
@@ -181,13 +183,6 @@ watch(visibility, (newVal) => {
     background-color: transparent;
     -webkit-backdrop-filter: blur(10px);
     backdrop-filter: blur(10px);
-  }
-}
-
-// 响应式调整
-@media (max-width: 768px) {
-  .layout-content {
-    padding: 8px;
   }
 }
 </style>

@@ -3,6 +3,7 @@
     class="compose-card"
     :data-theme="settingStore.setting.theme"
     :class="['card-status-' + project.status, { 'card-updating': loading }]"
+    @click="handleCardClick"
   >
     <div class="card-content">
       <!-- 项目头部信息 -->
@@ -20,7 +21,7 @@
           <div class="project-title-row">
             <div class="project-name">{{ project.name }}</div>
             <n-dropdown :options="dropdownOptions" @select="handleMenuSelect" trigger="click">
-              <n-button quaternary circle size="small" class="menu-btn">
+              <n-button quaternary circle size="small" class="menu-btn" @click.stop>
                 <template #icon>
                   <n-icon>
                     <MenuIcon />
@@ -57,7 +58,7 @@
       </div>
 
       <!-- 操作按钮区域 -->
-      <div class="action-buttons">
+      <div class="action-buttons" @click.stop>
         <n-button
           v-if="project.status === 'exited' || project.status === 'partial'"
           text
@@ -92,7 +93,7 @@
         >
           <template #icon>
             <n-icon>
-              <RefreshOutline />
+              <ReloadOutline />
             </n-icon>
           </template>
           重启
@@ -125,10 +126,14 @@
       </div>
     </div>
   </div>
+
+  <!-- Pull 日志弹窗 -->
+  <ComposePullLogsModal v-model:show="showPullLogs" :project="project" />
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { NIcon, type DropdownOption } from 'naive-ui'
 import { useSettingStore } from '@/store/setting'
 import type { ComposeProject } from '@/common/types'
@@ -139,14 +144,19 @@ import {
   PlayOutline,
   StopOutline,
   RefreshOutline,
+  ReloadOutline,
   TrashOutline,
+  CloudDownloadOutline,
 } from '@vicons/ionicons5'
 import LogIcon from '@/assets/svg/log.svg?component'
 import MenuIcon from '@/assets/svg/overflowMenuVertical.svg?component'
 import { useCompose } from '@/hooks/useCompose'
 import { renderIcon } from '@/common/utils'
+import ComposePullLogsModal from '@/components/ComposePullLogsModal.vue'
 
 const { handleStart, handleStop, handleRestart, handleDelete, handleCreate } = useCompose()
+const router = useRouter()
+const showPullLogs = ref(false)
 
 interface Props {
   project: ComposeProject
@@ -186,11 +196,18 @@ const dropdownOptions = computed<DropdownOption[]>(() => {
   }
 
   if (project.status === 'running' || project.status === 'partial') {
-    options.push({
-      label: '停止',
-      key: 'stop',
-      icon: renderIcon(StopOutline),
-    })
+    options.push(
+      {
+        label: '停止',
+        key: 'stop',
+        icon: renderIcon(StopOutline),
+      },
+      {
+        label: '重启',
+        key: 'restart',
+        icon: renderIcon(ReloadOutline),
+      },
+    )
   }
 
   options.push(
@@ -204,19 +221,28 @@ const dropdownOptions = computed<DropdownOption[]>(() => {
       key: 'divider1',
     },
     {
+      label: '拉取镜像',
+      key: 'pull',
+      icon: renderIcon(CloudDownloadOutline),
+    },
+    {
       label: '日志',
       key: 'logs',
       icon: renderIcon(LogIcon),
     },
   )
   if (project.status !== 'unknown') {
+    let label = '删除应用'
+    if (project.status === 'draft' || project.status === 'created_stack') {
+      label = '删除配置'
+    }
     options.push(
       {
         type: 'divider',
         key: 'divider2',
       },
       {
-        label: '删除',
+        label: label,
         key: 'delete',
         icon: renderIcon(TrashOutline),
         props: {
@@ -228,6 +254,16 @@ const dropdownOptions = computed<DropdownOption[]>(() => {
 
   return options
 })
+
+// 处理卡片点击，跳转到详情页
+const handleCardClick = () => {
+  router.push({
+    name: 'compose-detail',
+    params: {
+      projectName: props.project.name,
+    },
+  })
+}
 
 // 处理菜单选择
 const handleMenuSelect = (key: string) => {
@@ -250,6 +286,9 @@ const handleMenuSelect = (key: string) => {
     case 'create':
       handleCreate(props.project)
       break
+    case 'pull':
+      showPullLogs.value = true
+      break
   }
 }
 </script>
@@ -264,6 +303,7 @@ const handleMenuSelect = (key: string) => {
   border: 1px solid rgba(49, 65, 88, 0.5);
   background: rgba(29, 41, 61, 0.5);
   min-width: 320px;
+  cursor: pointer;
 
   &:hover {
     transform: translateY(-2px);

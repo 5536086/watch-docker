@@ -74,7 +74,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, h } from 'vue'
+import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAppStore } from '@/store/app'
 import { useAuthStore } from '@/store/auth'
@@ -95,6 +95,9 @@ import {
 } from '@vicons/ionicons5'
 import ComposeIcon from '@/assets/svg/compose.svg?component'
 import LogIcon from '@/assets/svg/log.svg?component'
+import VolumeIcon from '@/assets/svg/volume.svg?component'
+import NetworkIcon from '@/assets/svg/network.svg?component'
+import { renderIcon } from '@/common/utils'
 
 interface Props {
   onMenuSelect?: () => void // 菜单选择后的回调，用于移动端关闭抽屉
@@ -118,17 +121,23 @@ const version = computed(() => settingStore.systemInfo?.version)
 // 当前活跃的菜单项
 const activeKey = computed(() => {
   const path = route.path
-  if (path === '/') {
+  if (path === '/' || path === '/home') {
     return 'home'
   }
-  if (path === '/containers') {
+  if (path.startsWith('/containers')) {
     return 'containers'
   }
-  if (path === '/images') {
+  if (path.startsWith('/images')) {
     return 'images'
   }
-  if (path === '/compose') {
+  if (path.startsWith('/compose')) {
     return 'compose'
+  }
+  if (path.startsWith('/volumes')) {
+    return 'volumes'
+  }
+  if (path.startsWith('/networks')) {
+    return 'networks'
   }
   if (path === '/logs') {
     return 'logs'
@@ -163,38 +172,47 @@ const menuOptions = computed<MenuOption[]>(
       {
         label: '首页',
         key: 'home',
-        icon: () => h(HomeOutline),
+        icon: renderIcon(HomeOutline, { size: 20 }),
       },
       {
         label: 'Compose 项目',
         key: 'compose',
-        icon: () => h(ComposeIcon),
+        icon: renderIcon(ComposeIcon, { size: 20 }),
       },
       {
         label: '容器管理',
         key: 'containers',
-        icon: () => h(LayersOutline),
+        icon: renderIcon(LayersOutline, { size: 20 }),
       },
       {
         label: '镜像管理',
         key: 'images',
-        icon: () => h(ArchiveOutline),
+        icon: renderIcon(ArchiveOutline, { size: 20 }),
       },
-
+      {
+        label: '网络管理',
+        key: 'networks',
+        icon: renderIcon(NetworkIcon, { size: 20 }),
+      },
+      {
+        label: 'Volume 管理',
+        key: 'volumes',
+        icon: renderIcon(VolumeIcon, { size: 20 }),
+      },
       {
         label: '日志',
         key: 'logs',
-        icon: () => h(LogIcon),
+        icon: renderIcon(LogIcon, { size: 20 }),
       },
       settingStore.systemInfo?.isOpenDockerShell && {
         label: '终端',
         key: 'terminal',
-        icon: () => h(TerminalOutline),
+        icon: renderIcon(TerminalOutline, { size: 20 }),
       },
       {
         label: '系统设置',
         key: 'settings',
-        icon: () => h(SettingsOutline),
+        icon: renderIcon(SettingsOutline, { size: 20 }),
       },
     ].filter(Boolean) as MenuOption[],
 )
@@ -213,6 +231,12 @@ const handleMenuSelect = (key: string) => {
       break
     case 'compose':
       router.push('/compose')
+      break
+    case 'volumes':
+      router.push('/volumes')
+      break
+    case 'networks':
+      router.push('/networks')
       break
     case 'logs':
       router.push('/logs')
@@ -267,10 +291,6 @@ const handleLogout = async () => {
 const handleGithubClick = () => {
   window.open('https://github.com/jianxcao/watch-docker', '_blank')
 }
-
-onMounted(() => {
-  settingStore.fetchSystemInfo()
-})
 </script>
 
 <style scoped lang="less">
@@ -284,7 +304,8 @@ onMounted(() => {
 }
 
 .sider-header {
-  height: 56px;
+  // 加下 border 是56px
+  height: 55px;
   box-sizing: border-box;
   padding: 0 16px;
   border-bottom: 1px solid var(--divider-color);

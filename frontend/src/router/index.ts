@@ -34,6 +34,26 @@ const router = createRouter({
           meta: { title: '容器管理', requiresAuth: true, layoutClass: 'layout-containers' },
         },
         {
+          path: '/containers/create',
+          name: 'container-create',
+          component: () => import('@/pages/CreateContainer/ContainerCreateView.vue'),
+          meta: {
+            title: '创建容器',
+            requiresAuth: true,
+            layoutClass: 'layout-container-create',
+          },
+        },
+        {
+          path: '/containers/:id',
+          name: 'container-detail',
+          component: () => import('@/pages/ContainerDetail/ContainerDetailView.vue'),
+          meta: {
+            title: '容器详情',
+            requiresAuth: true,
+            layoutClass: 'layout-container-detail',
+          },
+        },
+        {
           path: '/images',
           component: () => import('@/pages/ImagesView.vue'),
           meta: { title: '镜像管理', requiresAuth: true, layoutClass: 'layout-images' },
@@ -52,6 +72,48 @@ const router = createRouter({
             title: '创建 Compose 项目',
             requiresAuth: true,
             layoutClass: 'layout-compose-create',
+          },
+        },
+        {
+          path: '/compose/:projectName/detail',
+          name: 'compose-detail',
+          component: () => import('@/pages/ComposeDetailView.vue'),
+          meta: {
+            title: 'Compose 项目详情',
+            requiresAuth: true,
+            layoutClass: 'layout-compose-detail',
+          },
+        },
+        {
+          path: '/volumes',
+          name: 'volumes',
+          component: () => import('@/pages/VolumesView.vue'),
+          meta: { title: 'Volume 管理', requiresAuth: true, layoutClass: 'layout-volumes' },
+        },
+        {
+          path: '/volumes/:name',
+          name: 'volume-detail',
+          component: () => import('@/pages/VolumeDetailView.vue'),
+          meta: {
+            title: 'Volume 详情',
+            requiresAuth: true,
+            layoutClass: 'layout-volume-detail',
+          },
+        },
+        {
+          path: '/networks',
+          name: 'networks',
+          component: () => import('@/pages/NetworksView.vue'),
+          meta: { title: '网络管理', requiresAuth: true, layoutClass: 'layout-networks' },
+        },
+        {
+          path: '/networks/:id',
+          name: 'network-detail',
+          component: () => import('@/pages/NetworkDetailView.vue'),
+          meta: {
+            title: '网络详情',
+            requiresAuth: true,
+            layoutClass: 'layout-network-detail',
           },
         },
         {

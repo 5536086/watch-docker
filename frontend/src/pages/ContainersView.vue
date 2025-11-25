@@ -23,14 +23,18 @@
         </n-button>
       </n-dropdown>
       <!-- 搜索 -->
-      <n-input v-model:value="searchKeyword" placeholder="名称、镜像或端口" clearable class="lg:w-[400px]!">
+      <n-input
+        v-model:value="searchKeyword"
+        placeholder="名称、镜像或端口"
+        clearable
+        class="lg:w-[400px]!"
+      >
         <template #prefix>
           <n-icon>
             <SearchOutline />
           </n-icon>
         </template>
       </n-input>
-
     </n-space>
     <!-- 容器列表 -->
     <div class="containers-content">
@@ -43,16 +47,30 @@
           </n-empty>
         </div>
 
-        <div v-else class="containers-grid" :class="{
-          'grid-cols-1': isMobile,
-          'grid-cols-2': isTablet || isLaptop,
-          'grid-cols-3': isDesktop,
-          'grid-cols-4': isDesktopLarge,
-        }">
-          <ContainerCard v-for="container in filteredContainers" :key="container.id" :container="container"
-            :loading="operationLoading" @start="() => handleStart(container)" @stop="() => handleStop(container)"
-            @update="() => handleUpdate(container)" @delete="() => handleDelete(container)"
-            @export="() => handleExport(container)" />
+        <div
+          v-else
+          class="containers-grid"
+          :class="{
+            'grid-cols-1': isMobile,
+            'grid-cols-2': isTablet || isLaptop,
+            'grid-cols-3': isDesktop,
+            'grid-cols-4': isDesktopLarge,
+          }"
+        >
+          <ContainerCard
+            v-for="container in filteredContainers"
+            :key="container.id"
+            :container="container"
+            :loading="operationLoading"
+            @start="() => handleStart(container)"
+            @stop="() => handleStop(container)"
+            @restart="() => handleRestart(container)"
+            @update="() => handleUpdate(container)"
+            @delete="() => handleDelete(container)"
+            @export="() => handleExport(container)"
+            @logs="() => handleLogs(container)"
+            @detail="() => handleDetail(container)"
+          />
         </div>
       </n-spin>
     </div>
@@ -61,14 +79,25 @@
       <!-- 悬浮操作按钮 -->
       <div class="floating-actions">
         <!-- 批量更新提示 -->
-        <n-badge v-if="containerStore.updateableContainers.length > 0"
-          :value="containerStore.updateableContainers.length" class="update-badge" type="info">
+        <n-badge
+          v-if="containerStore.updateableContainers.length > 0"
+          :value="containerStore.updateableContainers.length"
+          class="update-badge"
+          type="info"
+        >
           <span></span>
         </n-badge>
         <n-space vertical class="relative">
           <!-- 批量更新按钮 -->
-          <n-button v-if="containerStore.updateableContainers.length > 0" type="primary" size="large" circle
-            @click="handleBatchUpdate" :loading="containerStore.batchUpdating" class="fab-button">
+          <n-button
+            v-if="containerStore.updateableContainers.length > 0"
+            type="primary"
+            size="large"
+            circle
+            @click="handleBatchUpdate"
+            :loading="containerStore.batchUpdating"
+            class="fab-button"
+          >
             <template #icon>
               <n-icon size="20">
                 <CloudDownloadOutline />
@@ -79,18 +108,26 @@
       </div>
     </Teleport>
 
-
     <Teleport to="#header" defer>
       <div class="welcome-card">
         <div>
-          <n-h2 class="m-0 text-lg">容器管理<span class="text-xs pl-1">{{ connectionStatusType }}</span></n-h2>
-          <n-text depth="3" class="text-xs max-md:hidden ">
+          <n-h2 class="m-0 text-lg"
+            >容器管理<span class="text-xs pl-1">{{ connectionStatusType }}</span></n-h2
+          >
+          <n-text depth="3" class="text-xs max-md:hidden">
             共 {{ containerStore.stats.total }} 个容器，
             {{ containerStore.stats.running }} 个运行中，
             {{ containerStore.stats.updateable }} 个可更新
           </n-text>
         </div>
         <div class="flex gap-2">
+          <n-button type="primary" @click="handleCreateContainer" circle size="tiny">
+            <template #icon>
+              <n-icon>
+                <AddOutline />
+              </n-icon>
+            </template>
+          </n-button>
           <!-- 导入按钮 -->
           <n-button @click="showImportModal = true" circle size="tiny">
             <template #icon>
@@ -113,18 +150,21 @@
 
     <!-- 容器导入弹窗 -->
     <ContainerImportModal v-model:show="showImportModal" @success="handleImportSuccess" />
-
+    <!-- 容器日志弹窗 -->
+    <ContainerLogsModal v-model:show="showLogsModal" :container="currentContainer" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useContainerStore } from '@/store/container'
 import { useContainer } from '@/hooks/useContainer'
 import { useResponsive } from '@/hooks/useResponsive'
 import { renderIcon } from '@/common/utils'
 import ContainerCard from '@/components/ContainerCard.vue'
 import ContainerImportModal from '@/components/ContainerImportModal.vue'
+import ContainerLogsModal from '@/components/ContainerLogsModal.vue'
 import type { ContainerStatus } from '@/common/types'
 import {
   SearchOutline,
@@ -142,14 +182,15 @@ import {
   CalendarOutline,
   TextOutline,
   RadioButtonOnOutline,
+  AddOutline,
 } from '@vicons/ionicons5'
 import { useAppStore } from '@/store/app'
 
+const router = useRouter()
 const containerStore = useContainerStore()
 const containerHooks = useContainer()
 const { isMobile, isTablet, isLaptop, isDesktop, isDesktopLarge } = useResponsive()
 const appStore = useAppStore()
-
 
 // 搜索和过滤
 const searchKeyword = ref('')
@@ -158,7 +199,8 @@ const sortBy = ref<string>('name') // 默认按名称排序
 const sortOrder = ref<'asc' | 'desc'>('asc') // 排序方向，默认升序
 const operationLoading = ref(false)
 const showImportModal = ref(false)
-
+const showLogsModal = ref(false)
+const currentContainer = ref<ContainerStatus | null>(null)
 // WebSocket 连接状态
 const wsConnectionState = computed(() => containerStore.wsConnectionState)
 
@@ -167,7 +209,7 @@ const statusFilterMenuOptions = computed(() => [
   {
     label: '全部',
     key: null,
-    icon: renderIcon(AppsOutline)
+    icon: renderIcon(AppsOutline),
   },
   {
     label: '运行中',
@@ -250,16 +292,17 @@ const filteredContainers = computed(() => {
   // 搜索过滤
   if (searchKeyword.value) {
     const keyword = searchKeyword.value.toLowerCase()
-    containers = containers.filter(container => {
+    containers = containers.filter((container) => {
       // 搜索容器名称或镜像
       const matchesNameOrImage =
         container.name.toLowerCase().includes(keyword) ||
         container.image.toLowerCase().includes(keyword)
 
       // 搜索端口（支持搜索公共端口和私有端口）
-      const matchesPort = container.ports?.some(port =>
-        port.publicPort?.toString().includes(keyword) ||
-        port.privatePort?.toString().includes(keyword)
+      const matchesPort = container.ports?.some(
+        (port) =>
+          port.publicPort?.toString().includes(keyword) ||
+          port.privatePort?.toString().includes(keyword),
       )
       return matchesNameOrImage || matchesPort
     })
@@ -267,7 +310,7 @@ const filteredContainers = computed(() => {
 
   // 状态过滤
   if (statusFilter.value) {
-    containers = containers.filter(container => {
+    containers = containers.filter((container) => {
       switch (statusFilter.value) {
         case 'running':
           return container.running
@@ -301,8 +344,12 @@ const filteredContainers = computed(() => {
       case 'status':
         // 按状态排序：运行中 > 已停止 > 其他
         const getStatusPriority = (container: any) => {
-          if (container.running) { return 0 }
-          if (!container.running) { return 1 }
+          if (container.running) {
+            return 0
+          }
+          if (!container.running) {
+            return 1
+          }
           return 2
         }
         result = getStatusPriority(a) - getStatusPriority(b)
@@ -335,6 +382,15 @@ const handleStop = async (container: ContainerStatus) => {
   }
 }
 
+const handleRestart = async (container: ContainerStatus) => {
+  operationLoading.value = true
+  try {
+    await containerHooks.handleRestart(container)
+  } finally {
+    operationLoading.value = false
+  }
+}
+
 const handleUpdate = async (container: ContainerStatus) => {
   await containerHooks.handleUpdate(container)
 }
@@ -351,6 +407,19 @@ const handleDelete = async (container: ContainerStatus) => {
 // 处理导出容器
 const handleExport = async (container: ContainerStatus) => {
   await containerHooks.handleExport(container)
+}
+
+const handleLogs = async (container: ContainerStatus) => {
+  currentContainer.value = container
+  showLogsModal.value = true
+}
+
+const handleDetail = (container: ContainerStatus) => {
+  router.push({ name: 'container-detail', params: { id: container.id } })
+}
+
+const handleCreateContainer = () => {
+  router.push({ name: 'container-create' })
 }
 
 const handleBatchUpdate = async () => {
@@ -389,15 +458,12 @@ const connectionStatusType = computed(() => {
   }
 })
 
-
 // 页面初始化
 onMounted(async () => {
   containerStore.fetchContainers(true, true)
   // 启动 WebSocket 统计监听
   containerStore.statsWebSocket.connect()
 })
-
-
 </script>
 
 <style scoped lang="less">
@@ -469,9 +535,7 @@ onMounted(async () => {
     right: 6px;
     z-index: 101;
   }
-
 }
-
 
 // 响应式调整
 @media (max-width: 768px) {
@@ -494,7 +558,7 @@ onMounted(async () => {
         flex-direction: column;
         align-items: stretch !important;
 
-        &>div:last-child {
+        & > div:last-child {
           .n-space {
             flex-wrap: wrap;
 

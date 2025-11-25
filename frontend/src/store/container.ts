@@ -23,7 +23,7 @@ export const useContainerStore = defineStore('container', () => {
   const stoppedContainers = computed(() => containers.value.filter((c) => !c.running))
 
   const updateableContainers = computed(() =>
-    containers.value.filter((c) => c.status === 'UpdateAvailable' && !c.skipped)
+    containers.value.filter((c) => c.status === 'UpdateAvailable' && !c.skipped),
   )
 
   const upToDateContainers = computed(() => containers.value.filter((c) => c.status === 'UpToDate'))
@@ -146,10 +146,26 @@ export const useContainerStore = defineStore('container', () => {
     }
   }
 
-  // 方法：删除容器
-  const deleteContainer = async (id: string, force: boolean = false): Promise<boolean> => {
+  // 方法：重启容器
+  const restartContainer = async (id: string): Promise<boolean> => {
     try {
-      const data = await containerApi.deleteContainer(id, force)
+      const data = await containerApi.restartContainer(id)
+      if (data.code === 0) {
+        await fetchContainers() // 重新获取列表
+        return true
+      } else {
+        throw new Error(data.msg)
+      }
+    } catch (error) {
+      console.error('重启容器失败:', error)
+      throw error
+    }
+  }
+
+  // 方法：删除容器
+  const deleteContainer = async (id: string, force: boolean = false, removeVolumes: boolean = false, removeNetworks: boolean = false): Promise<boolean> => {
+    try {
+      const data = await containerApi.deleteContainer(id, force, removeVolumes, removeNetworks)
       if (data.code === 0) {
         await fetchContainers() // 重新获取列表
         return true
@@ -170,6 +186,15 @@ export const useContainerStore = defineStore('container', () => {
   // 方法：根据名称查找容器
   const findContainerByName = (name: string) => {
     return containers.value.find((c) => c.name === name)
+  }
+
+  // 方法：根据项目名称获取容器列表
+  const getProjectContainers = (projectName: string) => {
+    return computed(() => {
+      return containers.value.filter((container) => {
+        return container.labels?.['com.docker.compose.project'] === projectName
+      })
+    })
   }
 
   // 方法：检查容器是否正在更新
@@ -207,7 +232,7 @@ export const useContainerStore = defineStore('container', () => {
       // 构建下载URL，将token作为查询参数
       const baseUrl = '/api/v1'
       const downloadUrl = `${baseUrl}/containers/${id}/export?token=${encodeURIComponent(
-        token
+        token,
       )}&_t=${Date.now()}`
 
       // 使用window.open直接下载，浏览器会处理大文件和进度
@@ -221,6 +246,21 @@ export const useContainerStore = defineStore('container', () => {
       return true
     } catch (error: any) {
       console.error('导出容器失败:', error)
+      throw error
+    }
+  }
+
+  // 方法：获取容器详情
+  const getContainerDetail = async (id: string): Promise<any> => {
+    try {
+      const data = await containerApi.getContainerDetail(id)
+      if (data.code === 0) {
+        return data.data.container
+      } else {
+        throw new Error(data.msg)
+      }
+    } catch (error) {
+      console.error('获取容器详情失败:', error)
       throw error
     }
   }
@@ -249,11 +289,14 @@ export const useContainerStore = defineStore('container', () => {
     batchUpdate,
     startContainer,
     stopContainer,
+    restartContainer,
     deleteContainer,
     findContainerById,
     findContainerByName,
+    getProjectContainers,
     isContainerUpdating,
     exportContainer,
+    getContainerDetail,
     statsWebSocket,
   }
 })

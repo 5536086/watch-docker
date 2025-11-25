@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/image"
@@ -128,7 +129,19 @@ func (c *Client) StopContainer(ctx context.Context, id string, timeoutSeconds in
 		t := timeoutSeconds
 		timeout = &t
 	}
+
 	return c.docker.ContainerStop(ctx, id, container.StopOptions{Timeout: timeout})
+}
+
+// RestartContainer 重启容器（可选超时时间，单位秒）
+func (c *Client) RestartContainer(ctx context.Context, id string, timeoutSeconds int) error {
+	var timeout *int
+	if timeoutSeconds > 0 {
+		t := timeoutSeconds
+		timeout = &t
+	}
+
+	return c.docker.ContainerRestart(ctx, id, container.StopOptions{Timeout: timeout})
 }
 
 // RenameContainer 重命名容器
@@ -234,9 +247,9 @@ func (c *Client) SafeRemoveImage(ctx context.Context, imageID string) error {
 			return nil
 		}
 	}
-
+	logger.Logger.Info("没有其他容器使用，可以安全删除镜像", zap.String("imageID", imageID))
 	// 没有其他容器使用，可以安全删除
-	_, err = c.docker.ImageRemove(ctx, imageID, image.RemoveOptions{Force: false})
+	_, err = c.docker.ImageRemove(ctx, imageID, image.RemoveOptions{Force: true})
 	return err
 }
 
@@ -356,4 +369,40 @@ func (c *Client) CleanupContainerResources(ctx context.Context, containerInfo co
 	}
 
 	return nil
+}
+
+// ContainerLogs 获取容器日志流
+func (c *Client) ContainerLogs(ctx context.Context, containerID string, since string, timestamps bool, tail string, follow bool) (io.ReadCloser, error) {
+	options := container.LogsOptions{
+		ShowStdout: true,
+		ShowStderr: true,
+		Since:      since,
+		Timestamps: timestamps,
+		Follow:     follow,
+		Tail:       tail,
+	}
+	return c.docker.ContainerLogs(ctx, containerID, options)
+}
+
+// ContainerExecCreate 在容器中创建 exec 实例
+func (c *Client) ContainerExecCreate(ctx context.Context, containerID string, config container.ExecOptions) (container.ExecCreateResponse, error) {
+	return c.docker.ContainerExecCreate(ctx, containerID, config)
+}
+
+// ContainerExecAttach 附加到 exec 实例
+func (c *Client) ContainerExecAttach(ctx context.Context, execID string, config container.ExecStartOptions) (types.HijackedResponse, error) {
+	return c.docker.ContainerExecAttach(ctx, execID, config)
+}
+
+// ContainerExecResize 调整 exec 实例的终端大小
+func (c *Client) ContainerExecResize(ctx context.Context, execID string, options container.ResizeOptions) error {
+	return c.docker.ContainerExecResize(ctx, execID, options)
+}
+
+func (c *Client) ContainerStats(ctx context.Context, containerID string, stream bool) (container.StatsResponseReader, error) {
+	resp, err := c.docker.ContainerStats(ctx, containerID, stream)
+	if err != nil {
+		return container.StatsResponseReader{}, err
+	}
+	return resp, nil
 }

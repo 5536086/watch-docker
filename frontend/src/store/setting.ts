@@ -33,6 +33,15 @@ export const useSettingStore = defineStore('setting', () => {
   const docStyle = window.getComputedStyle(doc)
   safeArea.top = parseInt(docStyle.getPropertyValue('--top-inset')) || 0
   safeArea.bottom = parseInt(docStyle.getPropertyValue('--bottom-inset')) || 0
+  const layoutPadding = parseInt(docStyle.getPropertyValue('--layout-padding')) || 0
+  const contentSafeTop = ref(safeArea.top + headerHeight.value + layoutPadding)
+  const contentSafeBottom = ref(safeArea.bottom + layoutPadding)
+
+  watchEffect(() => {
+    document.body.style.setProperty('--content-safe-top', `${contentSafeTop.value}px`)
+    document.body.style.setProperty('--content-safe-bottom', `${contentSafeBottom.value}px`)
+  })
+
   const themeDefault = useThemeVars()
 
   const themeVars = ref<ThemeCommonVars & CustomThemeCommonVars>(themeDefault.value)
@@ -135,5 +144,7 @@ export const useSettingStore = defineStore('setting', () => {
     setTmpToken,
     getToken,
     clearToken,
+    contentSafeTop,
+    contentSafeBottom,
   }
 })

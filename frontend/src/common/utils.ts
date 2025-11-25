@@ -1,6 +1,6 @@
 import dayjs from 'dayjs'
 import { h } from 'vue'
-import { NIcon, type IconProps } from 'naive-ui'
+import { NIcon, type IconProps, type MessageApi } from 'naive-ui'
 
 export const sleep = (ms: number) => {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -9,6 +9,45 @@ export const sleep = (ms: number) => {
 // 渲染菜单图标
 export const renderIcon = (icon: any, props?: IconProps) => {
   return () => h(NIcon, props, { default: () => h(icon) })
+}
+
+/**
+ * 显示包含换行符的错误消息
+ * @param message MessageApi 实例
+ * @param msg 错误消息（可能包含 \n）
+ * @param duration 显示时长（毫秒），默认 5000
+ */
+export const showErrorWithNewlines = (message: MessageApi, msg: string, duration = 5000) => {
+  // 将 \n 分割成多行
+  const lines = msg.split('\\n')
+  message.error(
+    () =>
+      h(
+        'div',
+        { style: { whiteSpace: 'pre-wrap', maxWidth: '500px' } },
+        lines.map((line, index) => h('div', { key: index }, line || ' ')),
+      ),
+    { duration },
+  )
+}
+
+/**
+ * 显示包含换行符的警告消息
+ * @param message MessageApi 实例
+ * @param msg 警告消息（可能包含 \n）
+ * @param duration 显示时长（毫秒），默认 5000
+ */
+export const showWarningWithNewlines = (message: MessageApi, msg: string, duration = 5000) => {
+  const lines = msg.split('\\n')
+  message.warning(
+    () =>
+      h(
+        'div',
+        { style: { whiteSpace: 'pre-wrap', maxWidth: '500px' } },
+        lines.map((line, index) => h('div', { key: index }, line || ' ')),
+      ),
+    { duration },
+  )
 }
 
 // 格式化百分比
@@ -57,6 +96,39 @@ export const formatTime = (startedAt: string): string => {
   } else {
     return `${minutes}m`
   }
+}
+
+// 格式化数字
+export const formatNumber = (num: number) => {
+  return num.toLocaleString()
+}
+
+// 格式化时长（秒）
+export const formatDuration = (seconds: number) => {
+  if (seconds < 1) {
+    return seconds.toFixed(2) + '秒'
+  }
+
+  const days = Math.floor(seconds / 86400)
+  const hours = Math.floor((seconds % 86400) / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  const secs = Math.floor(seconds % 60)
+
+  const parts = []
+  if (days > 0) {
+    parts.push(`${days}天`)
+  }
+  if (hours > 0) {
+    parts.push(`${hours}小时`)
+  }
+  if (minutes > 0) {
+    parts.push(`${minutes}分`)
+  }
+  if (secs > 0 || parts.length === 0) {
+    parts.push(`${secs}秒`)
+  }
+
+  return parts.join(' ')
 }
 
 // 获取CPU使用率颜色
@@ -135,4 +207,68 @@ export const getDeviceType = (): 'desktop' | 'tablet' | 'mobile' => {
     return 'mobile'
   }
   return 'desktop'
+}
+
+// YAML 校验结果接口
+export interface YamlValidationResult {
+  isValid: boolean
+  errorMessage: string
+}
+
+/**
+ * 校验 Docker Compose YAML 配置
+ * @param yamlContent YAML 内容
+ * @returns 校验结果，包含 isValid 和 errorMessage
+ */
+export const validateComposeYaml = (yamlContent: string): YamlValidationResult => {
+  try {
+    const yaml = yamlContent.trim()
+
+    // 检查是否为空
+    if (!yaml) {
+      return {
+        isValid: false,
+        errorMessage: '请输入 YAML 配置',
+      }
+    }
+
+    // 检查是否包含 services 配置
+    if (!yaml.includes('services:')) {
+      return {
+        isValid: false,
+        errorMessage: '缺少 services 配置',
+      }
+    }
+
+    // 检查缩进和基本语法
+    const lines = yaml.split('\n')
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]
+      // 跳过空行和注释行
+      if (!line.trim() || line.trim().startsWith('#')) {
+        continue
+      }
+
+      // 检查引号是否闭合
+      const singleQuotes = (line.match(/'/g) || []).length
+      const doubleQuotes = (line.match(/"/g) || []).length
+      if (singleQuotes % 2 !== 0 || doubleQuotes % 2 !== 0) {
+        return {
+          isValid: false,
+          errorMessage: `第 ${i + 1} 行：引号未闭合`,
+        }
+      }
+    }
+
+    // 校验通过
+    return {
+      isValid: true,
+      errorMessage: '',
+    }
+  } catch (error) {
+    return {
+      isValid: false,
+      errorMessage: `YAML 格式错误: ${(error as Error).message}`,
+    }
+  }
 }

@@ -5,8 +5,20 @@ import type {
   ComposeProject,
   Config,
   ContainerStatus,
+  ContainerCreateRequest,
+  ContainerCreateResponse,
   ImageInfo,
   SystemInfo,
+  VolumeListResponse,
+  VolumeDetailResponse,
+  VolumeCreateRequest,
+  VolumePruneResponse,
+  NetworkListResponse,
+  NetworkDetailResponse,
+  NetworkCreateRequest,
+  NetworkPruneResponse,
+  NetworkConnectRequest,
+  NetworkDisconnectRequest,
 } from './types'
 
 // 健康检查相关
@@ -52,6 +64,14 @@ export const containerApi = {
       params: { isUserCache, isHaveUpdate },
     }),
 
+  // 获取容器详情
+  getContainerDetail: (id: string) =>
+    axios.get<{ container: any }>(API_ENDPOINTS.CONTAINER_DETAIL(id)),
+
+  // 创建容器
+  createContainer: (data: ContainerCreateRequest) =>
+    axios.post<ContainerCreateResponse>(API_ENDPOINTS.CONTAINER_CREATE, data),
+
   // 更新单个容器
   updateContainer: (id: string, image?: string) =>
     axios.post<{ ok: boolean }>(API_ENDPOINTS.CONTAINER_UPDATE(id), { image }),
@@ -65,10 +85,13 @@ export const containerApi = {
   // 停止容器
   stopContainer: (id: string) => axios.post<{ ok: boolean }>(API_ENDPOINTS.CONTAINER_STOP(id)),
 
+  // 重启容器
+  restartContainer: (id: string) => axios.post<{ ok: boolean }>(API_ENDPOINTS.CONTAINER_RESTART(id)),
+
   // 删除容器
-  deleteContainer: (id: string, force: boolean = false) =>
+  deleteContainer: (id: string, force: boolean = false, removeVolumes: boolean = false, removeNetworks: boolean = false) =>
     axios.delete<{ ok: boolean }>(API_ENDPOINTS.CONTAINER_DELETE(id), {
-      params: { force },
+      params: { force, removeVolumes, removeNetworks },
     }),
 
   // 系统清理
@@ -145,6 +168,12 @@ export const composeApi = {
   // 创建新项目（保存 YAML 文件）
   saveNewProject: (name: string, yamlContent: string) =>
     axios.post<{ ok: boolean; composeFile: string }>(`/compose/new`, { name, yamlContent }),
+
+  // 获取项目的 YAML 内容
+  getProjectYaml: (projectName: string, composeFile: string) =>
+    axios.get<{ yamlContent: string }>(`/compose/${projectName}/yaml`, {
+      params: { composeFile },
+    }),
 }
 
 // 二次验证 API
@@ -163,6 +192,52 @@ export const twoFAApi = {
   disable: () => axios.post('/2fa/disable'),
 }
 
+// Volume 相关API
+export const volumeApi = {
+  // 获取Volume列表
+  getVolumes: () => axios.get<VolumeListResponse>('/volumes'),
+
+  // 获取Volume详情
+  getVolume: (name: string) => axios.get<VolumeDetailResponse>(`/volumes/${name}`),
+
+  // 创建Volume
+  createVolume: (data: VolumeCreateRequest) => axios.post<{ volume: any }>('/volumes', data),
+
+  // 删除Volume
+  deleteVolume: (name: string, force: boolean = false) =>
+    axios.delete<{ ok: boolean }>(`/volumes/${name}`, { params: { force } }),
+
+  // 清理未使用的Volume
+  pruneVolumes: () => axios.post<VolumePruneResponse>('/volumes/prune'),
+}
+
+// 网络相关API
+export const networkApi = {
+  // 获取网络列表
+  getNetworks: () => axios.get<NetworkListResponse>(API_ENDPOINTS.NETWORKS),
+
+  // 获取网络详情
+  getNetwork: (id: string) => axios.get<NetworkDetailResponse>(API_ENDPOINTS.NETWORK_DETAIL(id)),
+
+  // 创建网络
+  createNetwork: (data: NetworkCreateRequest) =>
+    axios.post<{ network: any }>(API_ENDPOINTS.NETWORKS, data),
+
+  // 删除网络
+  deleteNetwork: (id: string) => axios.delete<{ ok: boolean }>(API_ENDPOINTS.NETWORK_DELETE(id)),
+
+  // 清理未使用的网络
+  pruneNetworks: () => axios.post<NetworkPruneResponse>(API_ENDPOINTS.NETWORK_PRUNE),
+
+  // 连接容器到网络
+  connectContainer: (id: string, data: NetworkConnectRequest) =>
+    axios.post<{ ok: boolean }>(API_ENDPOINTS.NETWORK_CONNECT(id), data),
+
+  // 从网络断开容器
+  disconnectContainer: (id: string, data: NetworkDisconnectRequest) =>
+    axios.post<{ ok: boolean }>(API_ENDPOINTS.NETWORK_DISCONNECT(id), data),
+}
+
 // 导出所有API
 export const api = {
   health: healthApi,
@@ -172,6 +247,8 @@ export const api = {
   config: configApi,
   compose: composeApi,
   twoFA: twoFAApi,
+  volume: volumeApi,
+  network: networkApi,
 }
 
 export default api

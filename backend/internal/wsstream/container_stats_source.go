@@ -3,6 +3,7 @@ package wsstream
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/jianxcao/watch-docker/backend/internal/config"
@@ -45,7 +46,7 @@ func NewContainerStatsSource(opts ContainerStatsSourceOptions) *ContainerStatsSo
 
 // Start 启动容器统计数据流
 func (s *ContainerStatsSource) Start(ctx context.Context) (StreamReader[string], error) {
-	logger.Logger.Info("启动容器统计数据流")
+	logger.Logger.Debug("启动容器统计数据流")
 
 	// 创建 channel 用于发送完整的 JSON 消息
 	messageChan := make(chan string, 10)
@@ -66,7 +67,7 @@ func (s *ContainerStatsSource) pushStats(ctx context.Context, messageChan chan s
 		close(messageChan)
 		// 通知 Docker 客户端连接已断开
 		s.docker.RemoveStatsConnection()
-		logger.Logger.Info("容器统计数据流已停止")
+		logger.Logger.Debug("容器统计数据流已停止")
 	}()
 
 	ticker := time.NewTicker(s.interval)
@@ -79,7 +80,7 @@ func (s *ContainerStatsSource) pushStats(ctx context.Context, messageChan chan s
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Logger.Info("容器统计数据流被取消")
+			logger.Logger.Debug("容器统计数据流被取消")
 			return
 		case <-ticker.C:
 			if err := s.sendStats(ctx, messageChan); err != nil {
@@ -97,7 +98,7 @@ func (s *ContainerStatsSource) sendStats(ctx context.Context, messageChan chan s
 
 	// 使用scanner获取完整的容器状态信息
 	containerStatuses, err := s.scanner.ScanOnce(ctx, cfg.Docker.IncludeStopped, cfg.Scan.Concurrency, true, false)
-	if err != nil {
+	if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
 		logger.Logger.Error("获取容器状态失败", zap.Error(err))
 		return err
 	}
@@ -190,7 +191,7 @@ func (s *ContainerStatsSource) sendStats(ctx context.Context, messageChan chan s
 
 // Stop 停止容器统计数据流
 func (s *ContainerStatsSource) Stop() error {
-	logger.Logger.Info("停止容器统计数据流")
+	logger.Logger.Debug("停止容器统计数据流")
 	// 由于使用 channel，关闭 reader 会触发 pushStats goroutine 停止
 	return nil
 }

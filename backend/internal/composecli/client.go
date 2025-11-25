@@ -34,10 +34,30 @@ func (c *Client) ScanProjects(ctx context.Context) []ComposeProject {
 	if appPath == "" {
 		return projects
 	}
+
+	const maxDepth = 2 // 最大遍历深度
+
 	err := filepath.Walk(appPath, func(curPath string, info os.FileInfo, err error) error {
 		if err != nil {
 			logger.Logger.Error("扫描项目失败", logger.ZapErr(err))
 			return nil // 忽略错误，继续扫描
+		}
+
+		// 计算当前路径相对于 appPath 的深度
+		relPath, err := filepath.Rel(appPath, curPath)
+		if err != nil {
+			return nil
+		}
+
+		// 计算深度（根目录为 0）
+		depth := 0
+		if relPath != "." {
+			depth = len(strings.Split(relPath, string(os.PathSeparator)))
+		}
+
+		// 如果是目录且深度已达到限制，跳过该目录
+		if info.IsDir() && depth >= maxDepth {
+			return filepath.SkipDir
 		}
 
 		// 查找 compose 文件
@@ -57,7 +77,7 @@ func (c *Client) ScanProjects(ctx context.Context) []ComposeProject {
 	})
 	if err != nil {
 		logger.Logger.Error("扫描项目失败", logger.ZapErr(err))
-		return nil
+		return projects
 	}
 
 	return projects
@@ -78,6 +98,27 @@ func (c *Client) isComposeFile(filename string) bool {
 		}
 	}
 	return false
+}
+
+// findComposeFileInDir 在指定目录中查找 compose 文件
+// 如果找到返回完整路径，否则返回默认的 docker-compose.yaml 路径
+func (c *Client) findComposeFileInDir(dir string) string {
+	composeFiles := []string{
+		"docker-compose.yml",
+		"docker-compose.yaml",
+		"compose.yml",
+		"compose.yaml",
+	}
+
+	for _, cf := range composeFiles {
+		fullPath := filepath.Join(dir, cf)
+		if _, err := os.Stat(fullPath); err == nil {
+			return fullPath
+		}
+	}
+
+	// 如果没有找到，返回默认的 docker-compose.yaml
+	return filepath.Join(dir, "docker-compose.yaml")
 }
 
 // parseStatusInfo 解析 oStatus 字符串，提取状态信息
@@ -212,6 +253,19 @@ func (c *Client) RestartProject(ctx context.Context, composeFile string) error {
 	return res.Error
 }
 
+// PullProject 拉取项目镜像
+func (c *Client) PullProject(ctx context.Context, composeFile string) error {
+	projectPath := path.Dir(composeFile)
+	res := ExecuteDockerComposeCommand(ctx, ExecDockerComposeOptions{
+		ExecPath:      projectPath,
+		Args:          []string{"pull"},
+		OperationName: "pull project",
+		NeedOutput:    true,
+	})
+	logger.Logger.Info("拉取镜像", zap.String("output", string(res.Output)))
+	return res.Error
+}
+
 // DeleteProject 删除项目及其所有资源
 // 如果是 draft 状态，直接删除配置文件和目录
 // 如果是其他状态，先执行 docker-compose down，然后删除配置文件和目录
@@ -233,9 +287,11 @@ func (c *Client) DeleteProject(ctx context.Context, composeFile string, status S
 	}
 
 	// 删除项目目录和配置文件
-	if err := os.RemoveAll(projectPath); err != nil {
-		logger.Logger.Error("删除项目目录失败", zap.String("path", projectPath), logger.ZapErr(err))
-		return errors.New("删除项目目录失败: " + err.Error())
+	if status == StatusDraft || status == StatusCreatedStack {
+		if err := os.RemoveAll(projectPath); err != nil {
+			logger.Logger.Error("删除项目目录失败", zap.String("path", projectPath), logger.ZapErr(err))
+			return errors.New("删除项目目录失败: " + err.Error())
+		}
 	}
 
 	logger.Logger.Info("删除项目成功",
@@ -273,7 +329,6 @@ func (c *Client) SaveNewProject(ctx context.Context, name string, yamlContent st
 
 	// 创建项目目录
 	projectPath := filepath.Join(appPath, name)
-	composeFile := filepath.Join(projectPath, "docker-compose.yaml")
 
 	// 检查项目是否已存在
 	if stat, err := os.Stat(projectPath); err == nil && stat.IsDir() {
@@ -282,7 +337,7 @@ func (c *Client) SaveNewProject(ctx context.Context, name string, yamlContent st
 			logger.Logger.Warn("项目已存在，需要 force=true 才能覆盖", zap.String("path", projectPath))
 			return "", errors.New("项目已存在，如需覆盖请使用强制模式")
 		}
-		logger.Logger.Info("项目已存在，将覆盖 docker-compose.yml 文件", zap.String("path", projectPath))
+		logger.Logger.Info("项目已存在，将覆盖 compose 文件", zap.String("path", projectPath))
 	} else {
 		// 项目目录不存在，创建目录
 		if err := os.MkdirAll(projectPath, 0755); err != nil {
@@ -292,7 +347,10 @@ func (c *Client) SaveNewProject(ctx context.Context, name string, yamlContent st
 		logger.Logger.Info("创建项目目录成功", zap.String("path", projectPath))
 	}
 
-	// 写入 docker-compose.yml 文件（如果已存在会被覆盖）
+	// 查找目录中是否已存在 compose 文件，如果存在则使用已有的文件名
+	composeFile := c.findComposeFileInDir(projectPath)
+
+	// 写入 compose 文件（如果已存在会被覆盖）
 	if err := os.WriteFile(composeFile, []byte(yamlContent), 0644); err != nil {
 		logger.Logger.Error("写入 Compose 文件失败", zap.String("file", composeFile), logger.ZapErr(err))
 		return "", errors.New("写入 Compose 文件失败: " + err.Error())
@@ -305,4 +363,26 @@ func (c *Client) SaveNewProject(ctx context.Context, name string, yamlContent st
 		zap.Bool("force", force))
 
 	return composeFile, nil
+}
+
+// GetProjectYaml 读取项目的 docker-compose.yaml 文件内容
+func (c *Client) GetProjectYaml(file string) (string, error) {
+
+	dir := path.Dir(file)
+	composeFile := c.findComposeFileInDir(dir)
+	// 检查文件是否存在
+	if _, err := os.Stat(composeFile); os.IsNotExist(err) {
+		logger.Logger.Error("Compose 文件不存在", zap.String("file", composeFile))
+		return "", errors.New("compose 文件不存在")
+	}
+
+	// 读取文件内容
+	content, err := os.ReadFile(composeFile)
+	if err != nil {
+		logger.Logger.Error("读取 Compose 文件失败", zap.String("file", composeFile), logger.ZapErr(err))
+		return "", errors.New("读取 Compose 文件失败: " + err.Error())
+	}
+
+	logger.Logger.Info("读取 Compose 文件成功", zap.String("file", composeFile))
+	return string(content), nil
 }
